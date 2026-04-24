@@ -18,11 +18,30 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError(null);
 
+    const lowerUsername = username.toLowerCase().trim();
+
+    // Credenciales predeterminadas para las psicólogas (Respaldo)
+    const fallbackUsers: Record<string, { display_name: string, password: string }> = {
+      'rosalia': { display_name: 'Psic. Rosalía', password: '1234' },
+      'alexandra': { display_name: 'Psic. Alexandra', password: '1234' },
+    };
+
     try {
+      // 1. Intentar validar con credenciales de respaldo primero para asegurar el acceso en la feria
+      if (fallbackUsers[lowerUsername] && fallbackUsers[lowerUsername].password === password) {
+        onLogin({
+          username: lowerUsername,
+          display_name: fallbackUsers[lowerUsername].display_name
+        });
+        setLoading(false);
+        return;
+      }
+
+      // 2. Si no es un usuario de respaldo, intentar con la base de datos
       const { data, error: signInError } = await supabase
         .from('system_users')
         .select('*')
-        .eq('username', username.toLowerCase())
+        .eq('username', lowerUsername)
         .eq('password', password)
         .maybeSingle();
 
@@ -35,7 +54,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       }
     } catch (err: any) {
       console.error('Login error:', err);
-      setError('Error al intentar iniciar sesión. Por favor, intente de nuevo.');
+      setError('Error al conectar con el sistema. Verifique su conexión.');
     } finally {
       setLoading(false);
     }
