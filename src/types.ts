@@ -25,4 +25,5 @@
   export interface SystemUser {
     username: string;
     display_name: string;
+    role?: 'admin' | 'parent';
   }

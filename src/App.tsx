@@ -35,7 +35,8 @@
       const handleLogin = (userData: any) => {
         const userToSave = {
           username: userData.username,
-          display_name: userData.display_name
+          display_name: userData.display_name,
+          role: userData.role
         };
         setUser(userToSave);
         localStorage.setItem('disciplina_user', JSON.stringify(userToSave));
@@ -209,37 +210,43 @@
                     </div>
                     <div className="text-left">
                       <p className="text-[10px] font-black uppercase text-slate-900 tracking-tighter leading-none">{user.display_name}</p>
-                      <p className="text-[8px] font-bold uppercase text-slate-400">Personal Autorizado</p>
+                      <p className="text-[8px] font-bold uppercase text-slate-400">
+                        {user.role === 'parent' ? 'Portal de Padres' : 'Personal Autorizado'}
+                      </p>
                     </div>
                   </div>
                   
-                  <Button
-                    variant={view === 'form' ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => handleViewChange('form')}
-                    className={`flex gap-2 rounded-xl px-2 sm:px-4 ${view === 'form' ? 'bg-slate-900' : ''}`}
-                  >
-                    <FilePlus2 className="w-4 h-4" />
-                    <span className="hidden lg:inline font-bold uppercase text-[10px] tracking-widest">Nuevo Reporte</span>
-                  </Button>
-                  <Button
-                    variant={view === 'history' ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => handleViewChange('history')}
-                    className={`flex gap-2 rounded-xl px-2 sm:px-4 ${view === 'history' ? 'bg-slate-900' : ''}`}
-                  >
-                    <History className="w-4 h-4" />
-                    <span className="hidden lg:inline font-bold uppercase text-[10px] tracking-widest">Historial</span>
-                  </Button>
-                  <Button
-                    variant={view === 'charts' ? 'primary' : 'ghost'}
-                    size="sm"
-                    onClick={() => handleViewChange('charts')}
-                    className={`flex gap-2 rounded-xl px-2 sm:px-4 ${view === 'charts' ? 'bg-slate-900' : ''}`}
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    <span className="hidden lg:inline font-bold uppercase text-[10px] tracking-widest">Gráfico</span>
-                  </Button>
+                  {user.role !== 'parent' && (
+                    <>
+                      <Button
+                        variant={view === 'form' ? 'primary' : 'ghost'}
+                        size="sm"
+                        onClick={() => handleViewChange('form')}
+                        className={`flex gap-2 rounded-xl px-2 sm:px-4 ${view === 'form' ? 'bg-slate-900' : ''}`}
+                      >
+                        <FilePlus2 className="w-4 h-4" />
+                        <span className="hidden lg:inline font-bold uppercase text-[10px] tracking-widest">Nuevo Reporte</span>
+                      </Button>
+                      <Button
+                        variant={view === 'history' ? 'primary' : 'ghost'}
+                        size="sm"
+                        onClick={() => handleViewChange('history')}
+                        className={`flex gap-2 rounded-xl px-2 sm:px-4 ${view === 'history' ? 'bg-slate-900' : ''}`}
+                      >
+                        <History className="w-4 h-4" />
+                        <span className="hidden lg:inline font-bold uppercase text-[10px] tracking-widest">Historial</span>
+                      </Button>
+                      <Button
+                        variant={view === 'charts' ? 'primary' : 'ghost'}
+                        size="sm"
+                        onClick={() => handleViewChange('charts')}
+                        className={`flex gap-2 rounded-xl px-2 sm:px-4 ${view === 'charts' ? 'bg-slate-900' : ''}`}
+                      >
+                        <BarChart3 className="w-4 h-4" />
+                        <span className="hidden lg:inline font-bold uppercase text-[10px] tracking-widest">Gráfico</span>
+                      </Button>
+                    </>
+                  )}
 
                   <Button
                     variant="ghost"
@@ -257,7 +264,13 @@
 
           {/* Main Content */}
           <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            {view === 'form' ? (
+            {user.role === 'parent' ? (
+              <ReportHistory 
+                key={user.username} 
+                initialStudentId={user.username} 
+                isParentMode={true}
+              />
+            ) : view === 'form' ? (
               <div className="space-y-8">
                 <div className="text-center max-w-2xl mx-auto mb-12">
                   <h2 className="text-2xl sm:text-4xl font-black text-slate-900 tracking-tighter uppercase mb-4">Registro de Incidencias</h2>

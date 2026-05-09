@@ -2,7 +2,7 @@
   import { supabase } from '../lib/supabase';
   import { Report } from '../types';
   import { Button } from './Button';
-  import { FileText, Download, Search, Filter, Loader2, Calendar, User, BarChart3, AlertTriangle, AlertCircle, Trash2, ShieldCheck, X, Printer, ArrowLeft, ChevronDown } from 'lucide-react';
+  import { FileText, Download, Search, Filter, Loader2, Calendar, User, BarChart3, AlertTriangle, AlertCircle, Trash2, ShieldCheck, X, Printer, ArrowLeft, ChevronDown, Check } from 'lucide-react';
   import { format } from 'date-fns';
   import { es } from 'date-fns/locale';
   import { generatePDF } from '../lib/pdf';
@@ -13,9 +13,10 @@
   interface ReportHistoryProps {
     onPenaltyUpdate?: () => void;
     initialStudentId?: string | null;
+    isParentMode?: boolean;
   }
 
-  export const ReportHistory: React.FC<ReportHistoryProps> = ({ onPenaltyUpdate, initialStudentId }) => {
+  export const ReportHistory: React.FC<ReportHistoryProps> = ({ onPenaltyUpdate, initialStudentId, isParentMode }) => {
     const [reports, setReports] = useState<Report[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
@@ -28,6 +29,11 @@
     const [generatingPdfId, setGeneratingPdfId] = useState<string | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+    
+    // Bulk and profile actions
+    const [selectedReportIds, setSelectedReportIds] = useState<Set<string>>(new Set());
+    const [bulkActionLoading, setBulkActionLoading] = useState(false);
+    const [showProfileDeleteConfirm, setShowProfileDeleteConfirm] = useState<boolean>(false);
 
     useEffect(() => {
       fetchReports();
@@ -36,10 +42,16 @@
     const fetchReports = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
+        let query = supabase
           .from('reports')
           .select('*')
           .order('created_at', { ascending: false });
+
+        if (isParentMode && initialStudentId) {
+          query = query.eq('student_id', initialStudentId);
+        }
+
+        const { data, error } = await query;
 
         if (error) throw error;
         setReports(data || []);
@@ -97,6 +109,69 @@
       } finally {
         setDeletingId(null);
         setShowDeleteConfirm(null);
+      }
+    };
+
+    const handleDeleteProfile = async () => {
+      if (!viewingStudentId) return;
+      setBulkActionLoading(true);
+      try {
+        const { error } = await supabase
+          .from('reports')
+          .delete()
+          .eq('student_id', viewingStudentId);
+
+        if (error) throw error;
+        
+        setReports(prev => prev.filter(r => r.student_id !== viewingStudentId));
+        showStatus('success', 'Perfil y reportes eliminados correctamente');
+        if (onPenaltyUpdate) onPenaltyUpdate();
+        setViewingStudentId(null);
+      } catch (error) {
+        console.error('Error deleting profile:', error);
+        showStatus('error', 'Error al eliminar el perfil');
+      } finally {
+        setBulkActionLoading(false);
+        setShowProfileDeleteConfirm(false);
+      }
+    };
+
+    const toggleReportSelection = (reportId: string) => {
+      const newSet = new Set(selectedReportIds);
+      if (newSet.has(reportId)) newSet.delete(reportId);
+      else newSet.add(reportId);
+      setSelectedReportIds(newSet);
+    };
+
+    const toggleAllSelection = () => {
+      if (!viewingStudentId) return;
+      const studentReports = groupedReports[viewingStudentId] || [];
+      if (selectedReportIds.size === studentReports.length) {
+        setSelectedReportIds(new Set());
+      } else {
+        setSelectedReportIds(new Set(studentReports.map(r => r.id!)));
+      }
+    };
+
+    const handleDownloadSelected = async () => {
+      if (selectedReportIds.size === 0) return;
+      setBulkActionLoading(true);
+      
+      try {
+        const idsArray = Array.from(selectedReportIds);
+        for (const reportId of idsArray) {
+          const report = reports.find(r => r.id === reportId);
+          if (report) {
+            await handleDownloadPDF(report);
+            await new Promise(r => setTimeout(r, 500));
+          }
+        }
+        showStatus('success', 'Descarga de reportes seleccionados completada');
+      } catch (err) {
+        showStatus('error', 'Error durante la descarga múltiple');
+      } finally {
+        setBulkActionLoading(false);
+        setSelectedReportIds(new Set());
       }
     };
 
@@ -199,24 +274,26 @@
       return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500 pb-20">
           {/* Top Navigation Bar */}
-          <div className="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
-            <button 
-              onClick={() => setViewingStudentId(null)}
-              className="flex items-center gap-3 text-slate-500 hover:text-indigo-600 font-bold uppercase text-[10px] tracking-[0.2em] transition-all group"
-            >
-              <div className="bg-slate-50 p-2 rounded-xl group-hover:bg-indigo-50 transition-colors">
-                <ArrowLeft className="w-4 h-4" />
-              </div>
-              Volver al Listado General
-            </button>
-            <div className="flex items-center gap-4">
-              <div className="h-4 w-[1px] bg-slate-200 hidden md:block" />
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Expediente Activo:</span>
-                <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded border border-slate-100">{viewingStudentId}</span>
+          {!isParentMode && (
+            <div className="flex items-center justify-between bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+              <button 
+                onClick={() => setViewingStudentId(null)}
+                className="flex items-center gap-3 text-slate-500 hover:text-indigo-600 font-bold uppercase text-[10px] tracking-[0.2em] transition-all group"
+              >
+                <div className="bg-slate-50 p-2 rounded-xl group-hover:bg-indigo-50 transition-colors">
+                  <ArrowLeft className="w-4 h-4" />
+                </div>
+                Volver al Listado General
+              </button>
+              <div className="flex items-center gap-4">
+                <div className="h-4 w-[1px] bg-slate-200 hidden md:block" />
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Expediente Activo:</span>
+                  <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded border border-slate-100">{viewingStudentId}</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Student Profile Header - Clean Light Professional Design */}
           <div className="bg-white rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
@@ -289,48 +366,85 @@
                   </div>
                 </div>
 
-                <div className="w-full lg:w-auto">
-                  <Button 
-                    variant="primary" 
-                    onClick={() => handleMarkAsPenalized(viewingStudentId)}
-                    disabled={penalizingId === viewingStudentId}
-                    className="w-full lg:w-auto bg-slate-900 text-white hover:bg-slate-800 border-none rounded-2xl px-10 py-5 font-black uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-4 transition-all hover:-translate-y-1 active:translate-y-0"
-                  >
-                    {penalizingId === viewingStudentId ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                    Penalizar Estudiante
-                  </Button>
-                </div>
+                {!isParentMode && (
+                  <div className="w-full lg:w-auto flex flex-col gap-3">
+                    <Button 
+                      variant="primary" 
+                      onClick={() => handleMarkAsPenalized(viewingStudentId)}
+                      disabled={penalizingId === viewingStudentId}
+                      className="w-full lg:w-auto bg-slate-900 text-white hover:bg-slate-800 border-none rounded-2xl px-10 py-5 font-black uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-4 transition-all hover:-translate-y-1 active:translate-y-0"
+                    >
+                      {penalizingId === viewingStudentId ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
+                      Penalizar Estudiante
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      onClick={() => setShowProfileDeleteConfirm(true)}
+                      className="w-full lg:w-auto text-red-600 hover:text-red-700 hover:bg-red-50 rounded-2xl px-6 py-4 font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center gap-2"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Eliminar Perfil Completo
+                    </Button>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="p-8 md:p-12 bg-[#F8FAFC]">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
-                <div className="space-y-1">
-                  <h3 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                    <div className="w-10 h-10 bg-cyan-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-200">
-                      <BarChart3 className="w-5 h-5 text-white" />
-                    </div>
-                    Historial de Incidencias
-                  </h3>
+                <div className="flex flex-col gap-2">
+                  <div className="space-y-1 flex items-center gap-4">
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                      <div className="w-10 h-10 bg-cyan-600 rounded-xl flex items-center justify-center shadow-lg shadow-cyan-200">
+                        <BarChart3 className="w-5 h-5 text-white" />
+                      </div>
+                      Historial de Incidencias
+                    </h3>
+                  </div>
                   <p className="text-slate-600 text-xs font-medium uppercase tracking-[0.1em] ml-13">Cronología completa de reportes registrados</p>
+                  
+                  {!isParentMode && selectedReportIds.size > 0 && (
+                    <div className="ml-13 mt-2">
+                      <Button 
+                        variant="primary"
+                        size="sm"
+                        onClick={handleDownloadSelected}
+                        disabled={bulkActionLoading}
+                        className="bg-cyan-600 hover:bg-cyan-700 flex items-center gap-2 tracking-widest uppercase text-[10px] rounded-xl px-4 py-2"
+                      >
+                        {bulkActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                        Descargar {selectedReportIds.size} Seleccionados
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 
-                <div className="relative group">
-                  <select
-                    value={`${sortBy}-${sortOrder}`}
-                    onChange={(e) => {
-                      const [newSortBy, newSortOrder] = e.target.value.split('-') as [any, any];
-                      setSortBy(newSortBy);
-                      setSortOrder(newSortOrder);
-                    }}
-                    className="appearance-none bg-white pl-5 pr-12 py-2.5 rounded-2xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-900 focus:ring-2 focus:ring-cyan-600 outline-none cursor-pointer transition-all hover:shadow-lg hover:shadow-cyan-100/50"
-                  >
-                    <option value="date-desc">Más Nuevos</option>
-                    <option value="date-asc">Más Viejos</option>
-                    <option value="severity-desc">Más Graves</option>
-                    <option value="severity-asc">Más Leves</option>
-                  </select>
-                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none group-hover:text-cyan-600 transition-colors" />
+                <div className="flex items-center gap-4">
+                  {!isParentMode && (
+                    <button
+                      onClick={toggleAllSelection}
+                      className="text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-cyan-600 transition-colors"
+                    >
+                      {selectedReportIds.size === studentReports.length ? 'Desmarcar Todos' : 'Seleccionar Todos'}
+                    </button>
+                  )}
+                  <div className="relative group" translate="no">
+                    <select
+                      value={`${sortBy}-${sortOrder}`}
+                      onChange={(e) => {
+                        const [newSortBy, newSortOrder] = e.target.value.split('-') as [any, any];
+                        setSortBy(newSortBy);
+                        setSortOrder(newSortOrder);
+                      }}
+                      className="appearance-none bg-white pl-5 pr-12 py-2.5 rounded-2xl border border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-900 focus:ring-2 focus:ring-cyan-600 outline-none cursor-pointer transition-all hover:shadow-lg hover:shadow-cyan-100/50"
+                    >
+                      <option value="date-desc">Más Nuevos</option>
+                      <option value="date-asc">Más Viejos</option>
+                      <option value="severity-desc">Más Graves</option>
+                      <option value="severity-asc">Más Leves</option>
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none group-hover:text-cyan-600 transition-colors" />
+                  </div>
                 </div>
               </div>
 
@@ -342,12 +456,29 @@
                   >
                     <div className="p-8 flex-1 flex flex-col space-y-6">
                       <div className="flex justify-between items-start">
-                        <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.15em] shadow-sm ${
-                          report.offense_type === 'Leve' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
-                          report.offense_type === 'Grave' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
-                          'bg-red-50 text-red-600 border border-red-100'
-                        }`}>
-                          Falta {report.offense_type}
+                        <div className="flex items-center gap-3">
+                          {!isParentMode && (
+                            <div 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleReportSelection(report.id!);
+                              }}
+                              className={`w-5 h-5 rounded flex items-center justify-center cursor-pointer transition-colors border ${
+                                selectedReportIds.has(report.id!) 
+                                  ? 'bg-cyan-600 border-cyan-600 text-white shadow-md' 
+                                  : 'border-slate-300 hover:border-cyan-500 bg-white shadow-sm'
+                              }`}
+                            >
+                              {selectedReportIds.has(report.id!) && <Check className="w-3 h-3 stroke-[3]" />}
+                            </div>
+                          )}
+                          <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-[0.15em] shadow-sm ${
+                            report.offense_type === 'Leve' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                            report.offense_type === 'Grave' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                            'bg-red-50 text-red-600 border border-red-100'
+                          }`}>
+                            Falta {report.offense_type}
+                          </div>
                         </div>
                         <span className="text-[10px] font-mono font-bold text-slate-300 group-hover:text-cyan-300 transition-colors">#{report.id?.slice(0, 8).toUpperCase()}</span>
                       </div>
@@ -387,22 +518,26 @@
                           >
                             <FileText className="w-5 h-5" />
                           </button>
-                          <button 
-                            onClick={() => handleDownloadPDF(report)}
-                            className="p-2.5 rounded-xl text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 transition-all"
-                            disabled={generatingPdfId === report.id}
-                            title="Descargar PDF"
-                          >
-                            {generatingPdfId === report.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-                          </button>
-                          <button 
-                            onClick={() => setShowDeleteConfirm(report.id!)}
-                            className="p-2.5 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
-                            disabled={deletingId === report.id}
-                            title="Eliminar Reporte"
-                          >
-                            {deletingId === report.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
-                          </button>
+                          {!isParentMode && (
+                            <>
+                              <button 
+                                onClick={() => handleDownloadPDF(report)}
+                                className="p-2.5 rounded-xl text-slate-400 hover:text-cyan-600 hover:bg-cyan-50 transition-all"
+                                disabled={generatingPdfId === report.id}
+                                title="Descargar PDF"
+                              >
+                                {generatingPdfId === report.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                              </button>
+                              <button 
+                                onClick={() => setShowDeleteConfirm(report.id!)}
+                                className="p-2.5 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                                disabled={deletingId === report.id}
+                                title="Eliminar Reporte"
+                              >
+                                {deletingId === report.id ? <Loader2 className="w-5 h-5 animate-spin" /> : <Trash2 className="w-5 h-5" />}
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -428,20 +563,22 @@
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button 
-                      variant="primary" 
-                      size="sm" 
-                      onClick={() => handleDownloadPDF(selectedReport)}
-                      disabled={generatingPdfId === selectedReport.id}
-                      className="flex gap-2 rounded-xl px-6 bg-slate-900 hover:bg-slate-800"
-                    >
-                      {generatingPdfId === selectedReport.id ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Download className="w-4 h-4" />
-                      )}
-                      {generatingPdfId === selectedReport.id ? 'Generando...' : 'Descargar Reporte PDF'}
-                    </Button>
+                    {!isParentMode && (
+                      <Button 
+                        variant="primary" 
+                        size="sm" 
+                        onClick={() => handleDownloadPDF(selectedReport)}
+                        disabled={generatingPdfId === selectedReport.id}
+                        className="flex gap-2 rounded-xl px-6 bg-slate-900 hover:bg-slate-800"
+                      >
+                        {generatingPdfId === selectedReport.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4" />
+                        )}
+                        {generatingPdfId === selectedReport.id ? 'Generando...' : 'Descargar Reporte PDF'}
+                      </Button>
+                    )}
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -501,6 +638,18 @@
       );
     }
 
+    if (!viewingStudentId && isParentMode) {
+      return (
+        <div className="py-20 text-center bg-white rounded-[2rem] border border-slate-100 shadow-sm animate-in zoom-in duration-500">
+          <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+            <ShieldCheck className="w-10 h-10 text-slate-300" />
+          </div>
+          <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Registro Limpio</h3>
+          <p className="text-slate-500 font-medium mt-2 max-w-sm mx-auto">No se han encontrado reportes disciplinarios para este estudiante o han sido removidos.</p>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-6">
         {/* Status Message */}
@@ -532,7 +681,7 @@
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-center gap-3">
               <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ordenar por:</span>
-              <div className="relative group">
+              <div className="relative group" translate="no">
                 <select
                   value={`${sortBy}-${sortOrder}`}
                   onChange={(e) => {
@@ -733,20 +882,22 @@
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <Button 
-                    variant="primary" 
-                    size="sm" 
-                    onClick={() => handleDownloadPDF(selectedReport)}
-                    disabled={generatingPdfId === selectedReport.id}
-                    className="flex gap-2 rounded-xl px-6 bg-slate-900 hover:bg-slate-800"
-                  >
-                    {generatingPdfId === selectedReport.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Download className="w-4 h-4" />
-                    )}
-                    {generatingPdfId === selectedReport.id ? 'Generando...' : 'Descargar Reporte PDF'}
-                  </Button>
+                  {!isParentMode && (
+                    <Button 
+                      variant="primary" 
+                      size="sm" 
+                      onClick={() => handleDownloadPDF(selectedReport)}
+                      disabled={generatingPdfId === selectedReport.id}
+                      className="flex gap-2 rounded-xl px-6 bg-slate-900 hover:bg-slate-800"
+                    >
+                      {generatingPdfId === selectedReport.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      {generatingPdfId === selectedReport.id ? 'Generando...' : 'Descargar Reporte PDF'}
+                    </Button>
+                  )}
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -778,6 +929,17 @@
           cancelText="Cancelar"
           onConfirm={() => showDeleteConfirm && handleDelete(showDeleteConfirm)}
           onCancel={() => setShowDeleteConfirm(null)}
+          variant="danger"
+        />
+
+        <ConfirmModal
+          isOpen={showProfileDeleteConfirm}
+          title="¿Eliminar Perfil Completo?"
+          message={`Esta acción eliminará de forma permanente TODOS los reportes y el expediente disciplinario completo del estudiante ${viewingStudentId}. Esta acción no se puede deshacer.`}
+          confirmText={bulkActionLoading ? 'Eliminando...' : 'Sí, Eliminar Todo'}
+          cancelText="Cancelar"
+          onConfirm={handleDeleteProfile}
+          onCancel={() => !bulkActionLoading && setShowProfileDeleteConfirm(false)}
           variant="danger"
         />
 
