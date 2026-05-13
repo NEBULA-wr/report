@@ -177,7 +177,7 @@
                     }}
                     className="bg-red-600 hover:bg-red-700 text-white px-12 py-6 text-sm font-black rounded-2xl shadow-xl flex gap-3 transition-transform active:scale-95 uppercase tracking-widest"
                   >
-                    Revisar y Penalizar <ShieldCheck className="w-5 h-5" />
+                    Iniciar Acompañamiento <ShieldCheck className="w-5 h-5" />
                   </Button>
                 </div>
               </div>

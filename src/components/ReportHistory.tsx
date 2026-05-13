@@ -57,7 +57,7 @@
         setReports(data || []);
       } catch (error) {
         console.error('Error fetching reports:', error);
-        showStatus('error', 'Error al cargar los reportes');
+        showStatus('error', 'Error al cargar los reportes: ' + (error?.message || 'Error desconocido'));
       } finally {
         setLoading(false);
       }
@@ -80,11 +80,11 @@
 
         if (error) throw error;
         
-        showStatus('success', 'Estudiante marcado como penalizado correctamente');
+        showStatus('success', 'Acompañamiento registrado correctamente');
         if (onPenaltyUpdate) onPenaltyUpdate();
       } catch (error) {
         console.error('Error penalizing student:', error);
-        showStatus('error', 'Error al penalizar al estudiante. Asegúrese de que la tabla "penalties" existe.');
+        showStatus('error', 'Error al registrar el acompañamiento. Asegúrese de que la tabla "penalties" existe.');
       } finally {
         setPenalizingId(null);
       }
@@ -375,7 +375,7 @@
                       className="w-full lg:w-auto bg-slate-900 text-white hover:bg-slate-800 border-none rounded-2xl px-10 py-5 font-black uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-4 transition-all hover:-translate-y-1 active:translate-y-0"
                     >
                       {penalizingId === viewingStudentId ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />}
-                      Penalizar Estudiante
+                      Iniciar Acompañamiento
                     </Button>
                     <Button 
                       variant="ghost" 
@@ -743,7 +743,7 @@
                           ) : (
                             <ShieldCheck className="w-3 h-3" />
                           )}
-                          Marcar Penalización
+                          Registrar Acompañamiento
                         </Button>
                       )}
                     </div>

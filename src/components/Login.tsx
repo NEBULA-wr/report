@@ -11,8 +11,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [activeTab, setActiveTab] = useState<'admin' | 'parent'>('admin');
   
   // Admin fields
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState('rosalia');
+  const [password, setPassword] = useState('1234');
   
   // Parent fields
   const [studentName, setStudentName] = useState('');
@@ -157,7 +157,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 />
               </div>
               <div>
-                <h1 className="text-2xl font-black text-white tracking-tight uppercase leading-none mb-1">Politécnico Hermana Rosario Torres Fe y Alégria </h1>
+                <h1 className="text-2xl font-black text-white tracking-tight uppercase leading-none mb-1">Politécnico</h1>
                 <p className="text-[10px] font-black text-indigo-300 uppercase tracking-[0.3em]">Gestión Disciplinaria</p>
               </div>
             </div>
